@@ -8,8 +8,8 @@ use ndarray::Array1;
 use serde::{Deserialize, Serialize};
 
 pub struct NetworkState {
-    neuron_values: Vec<Array1<f64>>,
-    deltas: Vec<Array1<f64>>
+    neuron_values: Vec<Array1<f32>>,
+    deltas: Vec<Array1<f32>>
 }
 
 impl NetworkState {
@@ -56,7 +56,7 @@ impl Network {
         // Hidden layers neurons
         for &c_curr in c_hidden_layers {
             let distr = hidden_activation.weights_distr(c_prev, c_curr);
-            let weights: Vec<f64> = (0..(c_prev*c_curr)).map(|_| distr.sample(&mut rand::rng())).collect();
+            let weights: Vec<f32> = (0..(c_prev*c_curr)).map(|_| distr.sample(&mut rand::rng())).collect();
 
             layers.push(
                 Layer::new(
@@ -73,7 +73,7 @@ impl Network {
 
         // Output layer neurons
         let distr = outputs_activation.weights_distr(c_prev, c_outputs);
-        let weights: Vec<f64> = (0..(c_prev*c_outputs)).map(|_| distr.sample(&mut rand::rng())).collect();
+        let weights: Vec<f32> = (0..(c_prev*c_outputs)).map(|_| distr.sample(&mut rand::rng())).collect();
 
         layers.push(
             Layer::new(
@@ -90,7 +90,7 @@ impl Network {
         }
     }
 
-    fn forward(&mut self, net_state: &mut NetworkState, inputs: &[f64]) {
+    fn forward(&mut self, net_state: &mut NetworkState, inputs: &[f32]) {
         net_state.neuron_values[0].assign(&Array1::from_vec(inputs.to_vec()));
 
         for i in 0..self.layers.len() {
@@ -99,11 +99,11 @@ impl Network {
         }
     }
 
-    fn get_output<'ns_lifetime>(&self, net_state: &'ns_lifetime NetworkState) -> &'ns_lifetime [f64] {
+    fn get_output<'ns_lifetime>(&self, net_state: &'ns_lifetime NetworkState) -> &'ns_lifetime [f32] {
         net_state.neuron_values.last().unwrap().as_slice().unwrap()
     }
 
-    fn backpropagate(&mut self, net_state: &mut NetworkState, targets: &[f64], learning_rate: f64) {
+    fn backpropagate(&mut self, net_state: &mut NetworkState, targets: &[f32], learning_rate: f32) {
         let targets = Array1::from_vec(targets.to_vec());
         
         let last_idx = self.layers.len() - 1;
@@ -144,10 +144,10 @@ impl Network {
     pub fn train<'ns_lifetime>(
         &mut self,
         net_state: &'ns_lifetime mut NetworkState,
-        inputs: &[f64],
-        targets: &[f64],
-        learning_rate: f64
-    ) -> &'ns_lifetime [f64] {
+        inputs: &[f32],
+        targets: &[f32],
+        learning_rate: f32
+    ) -> &'ns_lifetime [f32] {
 
         self.forward(net_state, inputs);
         self.backpropagate(net_state, targets, learning_rate);
@@ -158,8 +158,8 @@ impl Network {
     pub fn run<'ns_lifetime>(
         &mut self,
         net_state: &'ns_lifetime mut NetworkState,
-        inputs: &[f64]
-    ) -> &'ns_lifetime [f64] {
+        inputs: &[f32]
+    ) -> &'ns_lifetime [f32] {
 
         self.forward(net_state, inputs);
         self.get_output(net_state)

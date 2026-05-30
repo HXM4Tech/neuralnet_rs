@@ -21,7 +21,7 @@ fn main() {
     let mut net = Network::new(
         28 * 28,
         &[128, 64],
-        Activation::LeakyReLU,
+        Activation::LeakyRelu,
         10,
         Activation::Softmax
     );
@@ -68,8 +68,8 @@ fn main() {
             }
         }
 
-        let accuracy = (correct as f64 / test_images.len() as f64) * 100.0;
-        let avg_loss = epoch_loss / train_images.len() as f64;
+        let accuracy = (correct as f32 / test_images.len() as f32) * 100.0;
+        let avg_loss = epoch_loss / train_images.len() as f32;
         
         println!("Epoch {}/{} -> Loss: {:.4} | Test Accuracy: {:.2}%", epoch, epochs, avg_loss, accuracy);
     }
@@ -77,11 +77,11 @@ fn main() {
     // Save the trained model
     std::fs::create_dir_all("saved_models").expect("Failed to create directory for saved models");
 
-    net.save("saved_models/mnist_model.bin").expect("Failed to save the model");
+    net.save("saved_models/mnist.bin").expect("Failed to save the model");
 }
 
 
-fn argmax(slice: &[f64]) -> usize {
+fn argmax(slice: &[f32]) -> usize {
     slice
         .iter()
         .enumerate()
@@ -91,7 +91,7 @@ fn argmax(slice: &[f64]) -> usize {
 }
 
 
-fn read_mnist_images(path: &str) -> Vec<Vec<f64>> {
+fn read_mnist_images(path: &str) -> Vec<Vec<f32>> {
     let file = File::open(path).unwrap_or_else(|_| panic!("Nie znaleziono pliku: {}", path));
     let mut reader = BufReader::new(file);
 
@@ -116,7 +116,7 @@ fn read_mnist_images(path: &str) -> Vec<Vec<f64>> {
     for _ in 0..count {
         reader.read_exact(&mut buffer).unwrap();
 
-        let normalized: Vec<f64> = buffer.iter().map(|&x| x as f64 / 255.0).collect();
+        let normalized: Vec<f32> = buffer.iter().map(|&x| x as f32 / 255.0).collect();
         dataset.push(normalized);
     }
     dataset
