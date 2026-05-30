@@ -1,7 +1,8 @@
 use ndarray::Array1;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[allow(unused)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub enum Activation {
     ReLU,
     LeakyReLU,
@@ -17,6 +18,9 @@ impl Activation {
             Activation::Sigmoid => inputs.iter_mut().for_each(|x| *x = 1.0 / (1.0 + (- (*x)).exp())),
 
             Activation::Softmax => {
+                // prevent overflow in exp leading to NaNs; this will not treat saturation
+                inputs.iter_mut().for_each(|x| *x = x.clamp(-709.78, 709.78));
+
                 let max_input = inputs.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
                 
                 inputs.iter_mut().for_each(|x| *x = ((*x) - max_input).exp());

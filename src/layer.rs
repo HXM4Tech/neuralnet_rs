@@ -1,7 +1,9 @@
 use crate::activation::Activation;
 
 use ndarray::{Array2, Array1, ArrayView1};
+use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize)]
 pub struct Layer {
     pub weights: Array2<f64>,    // length: neuron count * inputs count
     pub biases: Array1<f64>,     // length: neuron count

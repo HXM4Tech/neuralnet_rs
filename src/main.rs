@@ -3,7 +3,7 @@ mod layer;
 mod network;
 
 use activation::Activation;
-use network::Network;
+use network::{Network, NetworkState};
 
 use std::fs::File;
 use std::io::{BufReader, Read};
@@ -11,10 +11,10 @@ use rand::seq::SliceRandom;
 
 fn main() {
     // Load MNIST dataset
-    let train_images = read_mnist_images("data/train-images.idx3-ubyte");
-    let train_labels = read_mnist_labels("data/train-labels.idx1-ubyte");
-    let test_images = read_mnist_images("data/t10k-images.idx3-ubyte");
-    let test_labels = read_mnist_labels("data/t10k-labels.idx1-ubyte");
+    let train_images = read_mnist_images("training_data/train-images.idx3-ubyte");
+    let train_labels = read_mnist_labels("training_data/train-labels.idx1-ubyte");
+    let test_images = read_mnist_images("training_data/t10k-images.idx3-ubyte");
+    let test_labels = read_mnist_labels("training_data/t10k-labels.idx1-ubyte");
 
     println!("Loaded {} training samples and {} test samples", train_images.len(), test_images.len());
 
@@ -25,6 +25,8 @@ fn main() {
         10,
         Activation::Softmax
     );
+    
+    let mut net_state = NetworkState::new(&net);
 
     let epochs = 10;
     let learning_rate = 0.05;
@@ -46,14 +48,19 @@ fn main() {
             let mut target = vec![0.0; 10];
             target[label] = 1.0;
 
-            let output = net.train(&input, &target, learning_rate);
+            let output = net.train(
+                &mut net_state,
+                &input,
+                &target,
+                learning_rate
+            );
 
             epoch_loss -= (output[label] + 1e-15).ln();
         }
 
         let mut correct = 0;
         for i in 0..test_images.len() {
-            let output = net.predict(&test_images[i]);
+            let output = net.run(&mut net_state, &test_images[i]);
             let prediction = argmax(output);
             
             if prediction == test_labels[i] as usize {
@@ -66,6 +73,11 @@ fn main() {
         
         println!("Epoch {}/{} -> Loss: {:.4} | Test Accuracy: {:.2}%", epoch, epochs, avg_loss, accuracy);
     }
+
+    // Save the trained model
+    std::fs::create_dir_all("saved_models").expect("Failed to create directory for saved models");
+
+    net.save("saved_models/mnist_model.bin").expect("Failed to save the model");
 }
 
 
