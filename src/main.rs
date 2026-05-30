@@ -29,7 +29,7 @@ fn main() {
     let mut net_state = NetworkState::new(&net);
 
     let epochs = 10;
-    let learning_rate = 0.05;
+    let learning_rate = 0.01;
 
     let mut indices: Vec<usize> = (0..train_images.len()).collect();
     let mut rng = rand::rng();

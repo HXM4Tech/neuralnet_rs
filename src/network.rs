@@ -167,10 +167,10 @@ impl Network {
 
     #[allow(dead_code)]
     pub fn save(&self, path: &str) -> std::io::Result<()> {
-        let file = File::create(path)?;
+        let mut file = File::create(path)?;
 
-        bincode::serialize_into(
-            file,
+        rmp_serde::encode::write(
+            &mut file,
             self
         ).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
     }
@@ -179,7 +179,7 @@ impl Network {
     pub fn load(path: &str) -> std::io::Result<Self> {
         let file = File::open(path)?;
 
-        bincode::deserialize_from(
+        rmp_serde::decode::from_read(
             file
         ).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
     }
