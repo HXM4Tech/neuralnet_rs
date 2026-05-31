@@ -1,4 +1,4 @@
-use ndarray::Array1;
+use ndarray::Array2;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -11,22 +11,23 @@ pub enum Activation {
 }
 
 impl Activation {
-    pub fn apply(&self, inputs: &mut Array1<f32>) {
+    pub fn apply(&self, inputs: &mut Array2<f32>) {
         match self {
-            Activation::Relu => inputs.iter_mut().for_each(|x| *x = (*x).max(0.0)),
-            Activation::LeakyRelu => inputs.iter_mut().for_each(|x| *x = (*x).max(0.01 * (*x))),
-            Activation::Sigmoid => inputs.iter_mut().for_each(|x| *x = 1.0 / (1.0 + (- (*x)).exp())),
+            Activation::Relu => inputs.mapv_inplace(|x| x.max(0.0)),
+            Activation::LeakyRelu => inputs.mapv_inplace(|x| if x > 0.0 { x } else { 0.01 * x }),
+            Activation::Sigmoid => inputs.mapv_inplace(|x| 1.0 / (1.0 + (-x).exp())),
 
             Activation::Softmax => {
-                // prevent overflow in exp leading to NaNs; this will not treat saturation
-                inputs.iter_mut().for_each(|x| *x = x.clamp(-88.72, 88.72)); // ln(f32::MAX) = ~88.723
+                for mut row in inputs.rows_mut() {
+                    // prevent overflow in exp leading to NaNs; this will not treat saturation
+                    row.mapv_inplace(|x| x.clamp(-88.72, 88.72)); // ln(f32::MAX) = ~88.723
 
-                let max_input = inputs.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-                
-                inputs.iter_mut().for_each(|x| *x = ((*x) - max_input).exp());
+                    let max_input = row.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+                    row.mapv_inplace(|x| (x-max_input).exp());
 
-                let exps_sum: f32 = inputs.iter().sum();
-                inputs.iter_mut().for_each(|x| *x /= exps_sum + 1e-15);
+                    let exps_sum: f32 = row.iter().sum();
+                    row.mapv_inplace(|x| x / (exps_sum + 1e-15));
+                }
             }
         }
     }
@@ -55,7 +56,7 @@ impl Activation {
         }
     }
 
-    pub fn derivative_array(&self, y: &Array1<f32>) -> Array1<f32> {
+    pub fn derivative_array(&self, y: &Array2<f32>) -> Array2<f32> {
         y.mapv(|val| self.derivative(val))
     }
 }

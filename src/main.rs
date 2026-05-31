@@ -16,7 +16,18 @@ fn main() {
     let test_images = read_mnist_images("training_data/t10k-images.idx3-ubyte");
     let test_labels = read_mnist_labels("training_data/t10k-labels.idx1-ubyte");
 
-    println!("Loaded {} training samples and {} test samples", train_images.len(), test_images.len());
+    let train_images_flat: Vec<f32> = train_images.into_iter().flatten().collect();
+    let train_inputs = ndarray::Array2::from_shape_vec((60000, 28 * 28), train_images_flat).unwrap();
+
+    let mut train_targets = ndarray::Array2::zeros((60000, 10));
+    for (i, &label) in train_labels.iter().enumerate() {
+        train_targets[[i, label as usize]] = 1.0;
+    }
+
+    let test_images_flat: Vec<f32> = test_images.into_iter().flatten().collect();
+    let test_inputs = ndarray::Array2::from_shape_vec((10000, 28 * 28), test_images_flat).unwrap();
+
+    println!("Loaded {} training samples and {} test samples", train_inputs.nrows(), test_inputs.nrows());
 
     let mut net = Network::new(
         28 * 28,
@@ -32,7 +43,7 @@ fn main() {
     let learning_rate = 0.05;
     let batch_size = 64;
 
-    let mut indices: Vec<usize> = (0..train_images.len()).collect();
+    let mut indices: Vec<usize> = (0..train_inputs.nrows()).collect();
     let mut rng = rand::rng();
 
     println!("Starting training");
@@ -43,24 +54,14 @@ fn main() {
         let mut epoch_loss = 0.0;
 
         for chunk in indices.chunks(batch_size) {
-            let mut batch_inputs: Vec<&[f32]> = Vec::with_capacity(chunk.len());
-            let mut batch_targets = Vec::with_capacity(chunk.len());
+            let batch_inputs = train_inputs.select(ndarray::Axis(0), chunk);
+            let batch_targets = train_targets.select(ndarray::Axis(0), chunk);
 
-            for &idx in chunk {
-                batch_inputs.push(&train_images[idx]);
-
-
-                let mut target = [0.0; 10];
-                target[train_labels[idx] as usize] = 1.0;
-                batch_targets.push(target);
-            }
-
-            let batch_targets_1: Vec<&[f32]> = batch_targets.iter().map(|x| x.as_slice()).collect();
 
             let loss = net.train_batch(
                 &mut net_state,
-                &batch_inputs,
-                &batch_targets_1,
+                batch_inputs.view(),
+                batch_targets.view(),
                 learning_rate
             );
 
@@ -68,8 +69,8 @@ fn main() {
         }
 
         let mut correct = 0;
-        for i in 0..test_images.len() {
-            let output = net.run(&mut net_state, &test_images[i]);
+        for i in 0..test_inputs.nrows() {
+            let output = net.run(&mut net_state, test_inputs.row(i));
             let prediction = argmax(output);
             
             if prediction == test_labels[i] as usize {
@@ -77,8 +78,8 @@ fn main() {
             }
         }
 
-        let accuracy = (correct as f32 / test_images.len() as f32) * 100.0;
-        let avg_loss = epoch_loss / train_images.len() as f32;
+        let accuracy = (correct as f32 / test_inputs.nrows() as f32) * 100.0;
+        let avg_loss = epoch_loss / train_inputs.nrows() as f32;
         
         println!("Epoch {}/{} -> Loss: {:.4} | Test Accuracy: {:.2}%", epoch, epochs, avg_loss, accuracy);
     }
@@ -90,8 +91,8 @@ fn main() {
 }
 
 
-fn argmax(slice: &[f32]) -> usize {
-    slice
+fn argmax(data: ndarray::ArrayView1<f32>) -> usize {
+    data
         .iter()
         .enumerate()
         .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))

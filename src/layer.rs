@@ -1,12 +1,12 @@
 use crate::activation::Activation;
 
-use ndarray::{Array2, Array1, ArrayView1};
+use ndarray::{Array1, Array2, ArrayView2};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct Layer {
-    pub weights: Array2<f32>,    // length: neuron count * inputs count
-    pub biases: Array1<f32>,     // length: neuron count
+    pub weights: Array2<f32>,    // shape: (neuron count, input count)
+    pub biases: Array1<f32>,     // shape: (neuron count)
     pub activation: Activation
 }
 
@@ -26,7 +26,11 @@ impl Layer {
      }
 
 
-    pub fn forward(&self, inputs: &ArrayView1<f32>) -> Array1<f32> {
+    pub fn forward(&self, inputs: &ArrayView2<f32>) -> Array2<f32> {
+        // inputs shape: (batch size, input count)
+        // weights shape: (neuron count, input count)
+        // weights.t() shape: (input count, neuron count)
+        
         let mut outputs = inputs.dot(&self.weights.t()) + &self.biases;
         self.activation.apply(&mut outputs);
 
