@@ -4,7 +4,7 @@ use crate::layer::Layer;
 use std::fs::File;
 
 use rand_distr::Distribution;
-use ndarray::{Array1, ArrayView1, Array2, ArrayView2};
+use ndarray::{Array1, ArrayView1, Array2, ArrayView2, linalg::general_mat_mul};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone)]
@@ -130,8 +130,28 @@ impl Network {
         net_state.neuron_values[0] = inputs.to_owned();
 
         for i in 0..self.layers.len() {
-            let input_val = net_state.neuron_values[i].view();
-            net_state.neuron_values[i + 1] = self.layers[i].forward(&input_val);
+            let layer = &self.layers[i];
+
+            for mut row in net_state.neuron_values[i+1].rows_mut() {
+                row.assign(&layer.biases);
+            }
+
+            let (a, b) = net_state.neuron_values.split_at_mut(i+1);
+
+            if &b[0].shape() != &[inputs.nrows(), layer.biases.len()] {
+                b[0] = Array2::zeros((inputs.nrows(), layer.biases.len()));
+            }
+
+            // equivalent to net_state.neuron_values[i+1] += net_state.neuron_values[i].dot(&layer.weights.t());
+            general_mat_mul(
+                1.0,
+                &a[i],
+                &layer.weights.t(),
+                1.0,
+                &mut b[0]
+            );
+
+            layer.activation.apply(&mut net_state.neuron_values[i+1]);
         }
     }
 
@@ -167,7 +187,9 @@ impl Network {
             let delta = &deltas[i];
             let inputs = &neuron_values[i];
 
-            grads.weight_grads[i] += &delta.t().dot(inputs);
+            // equivalent to grads.weight_grads[i] += &delta.t().dot(inputs);
+            general_mat_mul(1.0, &delta.t(), inputs, 1.0, &mut grads.weight_grads[i]);
+
             grads.bias_grads[i] += &delta.sum_axis(ndarray::Axis(0));
         }
     }

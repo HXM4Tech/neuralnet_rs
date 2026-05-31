@@ -35,12 +35,12 @@ impl Activation {
     pub fn weights_distr(&self, inputs_count: usize, outputs_count: usize) -> impl rand_distr::Distribution<f32> {
         match self {
             Activation::Relu | Activation::LeakyRelu => {
-                // He
+                // He Normal
                 let std = (2.0 / inputs_count as f32).sqrt();
                 rand_distr::Normal::new(0.0, std).unwrap()
             },
             Activation::Sigmoid | Activation::Softmax => {
-                // Xavier
+                // Xavier Normal
                 let std = (2.0 / (inputs_count + outputs_count) as f32).sqrt();
                 rand_distr::Normal::new(0.0, std).unwrap()
             },
