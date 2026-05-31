@@ -4,12 +4,46 @@ use crate::layer::Layer;
 use std::fs::File;
 
 use rand_distr::Distribution;
-use ndarray::Array1;
+use ndarray::{Array1, ArrayView1, Array2};
 use serde::{Deserialize, Serialize};
+
+#[derive(Clone)]
+struct Gradients {
+    pub weight_grads: Vec<Array2<f32>>,
+    pub bias_grads: Vec<Array1<f32>>
+}
+
+impl Gradients {
+    fn new(net: &Network) -> Self {
+        let mut weight_grads = Vec::with_capacity(net.layers.len());
+        let mut bias_grads = Vec::with_capacity(net.layers.len());
+
+        for l in &net.layers {
+            weight_grads.push(Array2::zeros(l.weights.raw_dim()));
+            bias_grads.push(Array1::zeros(l.biases.raw_dim()));
+        }
+
+        Self {
+            weight_grads,
+            bias_grads
+        }
+    }
+
+    fn clear(&mut self) {
+        for w in &mut self.weight_grads {
+            w.fill(0.0);
+        }
+
+        for b in &mut self.bias_grads {
+            b.fill(0.0);
+        }
+    }
+}
 
 pub struct NetworkState {
     neuron_values: Vec<Array1<f32>>,
-    deltas: Vec<Array1<f32>>
+    deltas: Vec<Array1<f32>>,
+    grads_buffer: Gradients
 }
 
 impl NetworkState {
@@ -29,7 +63,8 @@ impl NetworkState {
 
         Self {
             neuron_values,
-            deltas
+            deltas,
+            grads_buffer: Gradients::new(net)
         }
     }
 
@@ -90,8 +125,8 @@ impl Network {
         }
     }
 
-    fn forward(&mut self, net_state: &mut NetworkState, inputs: &[f32]) {
-        net_state.neuron_values[0].assign(&Array1::from_vec(inputs.to_vec()));
+    fn forward(&self, net_state: &mut NetworkState, inputs: &[f32]) {
+        net_state.neuron_values[0].assign(&ArrayView1::from(inputs));
 
         for i in 0..self.layers.len() {
             let input_val = net_state.neuron_values[i].view();
@@ -103,60 +138,133 @@ impl Network {
         net_state.neuron_values.last().unwrap().as_slice().unwrap()
     }
 
-    fn backpropagate(&mut self, net_state: &mut NetworkState, targets: &[f32], learning_rate: f32) {
-        let targets = Array1::from_vec(targets.to_vec());
+    fn backpropagate(
+        &self,
+        neuron_values: &[Array1<f32>],
+        deltas: &mut [Array1<f32>],
+        targets: &[f32],
+        grads: &mut Gradients
+    ) {
+
+        let targets = ArrayView1::from(targets);
         
         let last_idx = self.layers.len() - 1;
-        let outputs = &net_state.neuron_values[last_idx + 1];
+        let outputs = &neuron_values[last_idx + 1];
         let layer = &self.layers[last_idx];
         
         let mut last_deltas = outputs - &targets;
         if layer.activation != Activation::Softmax {
-            last_deltas *= &layer.activation.derivative_array(outputs);
+            last_deltas *= &layer.activation.derivative_array(&outputs);
         }
-        net_state.deltas[last_idx] = last_deltas;
+        deltas[last_idx] = last_deltas;
 
         for i in (0..self.layers.len() - 1).rev() {
             let next_layer = &self.layers[i + 1];
             let curr_layer = &self.layers[i];
             
-            let delta = next_layer.weights.t().dot(&net_state.deltas[i + 1]) 
-                        * &curr_layer.activation.derivative_array(&net_state.neuron_values[i + 1]);
+            let delta = next_layer.weights.t().dot(&deltas[i + 1]) 
+                        * &curr_layer.activation.derivative_array(&neuron_values[i + 1]);
             
-            net_state.deltas[i] = delta;
+            deltas[i] = delta;
         }
 
         for i in 0..self.layers.len() {
-            let delta = &net_state.deltas[i];
-            let inputs = &net_state.neuron_values[i];
-            let layer = &mut self.layers[i];
-
-            layer.biases -= &(learning_rate * delta);
-
-            let delta_mat = delta.view().insert_axis(ndarray::Axis(1));
-            let inputs_mat = inputs.view().insert_axis(ndarray::Axis(0));
+            let delta = &deltas[i];
+            let inputs = &neuron_values[i];
             
-            layer.weights -= &(learning_rate * delta_mat.dot(&inputs_mat));
+            let delta_2d = delta.view().insert_axis(ndarray::Axis(1));
+            let inputs_2d = inputs.view().insert_axis(ndarray::Axis(0));
+
+            grads.weight_grads[i] += &delta_2d.dot(&inputs_2d);
+            grads.bias_grads[i] += delta;
+        }
+    }
+
+    fn apply_gradients(&mut self, grads: &Gradients, learning_rate: f32) {
+        for (i, layer) in self.layers.iter_mut().enumerate() {
+            layer.weights -= &(learning_rate * &grads.weight_grads[i]);
+            layer.biases -= &(learning_rate * &grads.bias_grads[i]);
         }
     }
 
     #[allow(dead_code)]
-    pub fn train<'ns_lifetime>(
+    pub fn train(
         &mut self,
-        net_state: &'ns_lifetime mut NetworkState,
+        net_state: &mut NetworkState,
         inputs: &[f32],
         targets: &[f32],
         learning_rate: f32
-    ) -> &'ns_lifetime [f32] {
+    ) -> f32 {
+        net_state.grads_buffer.clear();
 
         self.forward(net_state, inputs);
-        self.backpropagate(net_state, targets, learning_rate);
-        self.get_output(net_state)
+
+        let NetworkState {
+            neuron_values,
+            deltas,
+            grads_buffer
+        } = net_state;
+
+        self.backpropagate(neuron_values, deltas, targets, grads_buffer);
+
+        let mut loss = 0.0;
+        let output = neuron_values.last().unwrap().as_slice().unwrap();
+
+        for (o, t) in output.iter().zip(targets.iter()) {
+            loss -= (o + 1e-15).ln() * t;
+        }
+
+        self.apply_gradients(&grads_buffer, learning_rate);
+
+        loss
+    }
+
+    #[allow(dead_code)]
+    pub fn train_batch(
+        &mut self,
+        net_state: &mut NetworkState,
+        batch_inputs: &[&[f32]],
+        batch_targets: &[&[f32]],
+        learning_rate: f32
+    ) -> f32 {
+        let batch_size = batch_inputs.len();
+
+        net_state.grads_buffer.clear();
+
+        let batch_loss = (0..batch_size).map(
+            |idx| {
+                let input = batch_inputs[idx];
+                let target = batch_targets[idx];
+                let mut loss = 0.0;
+
+                self.forward(net_state, input);
+
+                let NetworkState {
+                    neuron_values,
+                    deltas,
+                    grads_buffer
+                } = net_state;
+
+                self.backpropagate(neuron_values, deltas, target, grads_buffer);
+
+                let output = neuron_values.last().unwrap().as_slice().unwrap();
+
+                for (o, t) in output.iter().zip(target.iter()) {
+                    loss -= (o + 1e-15).ln() * t;
+                }
+
+                loss
+            }
+        ).sum();
+
+        self.apply_gradients(&net_state.grads_buffer, learning_rate / batch_size as f32);
+
+        batch_loss
     }
 
     #[allow(dead_code)]
     pub fn run<'ns_lifetime>(
-        &mut self,
+        &self,
         net_state: &'ns_lifetime mut NetworkState,
         inputs: &[f32]
     ) -> &'ns_lifetime [f32] {

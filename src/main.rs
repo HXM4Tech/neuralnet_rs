@@ -29,7 +29,8 @@ fn main() {
     let mut net_state = NetworkState::new(&net);
 
     let epochs = 10;
-    let learning_rate = 0.01;
+    let learning_rate = 0.05;
+    let batch_size = 64;
 
     let mut indices: Vec<usize> = (0..train_images.len()).collect();
     let mut rng = rand::rng();
@@ -41,21 +42,29 @@ fn main() {
 
         let mut epoch_loss = 0.0;
 
-        for &idx in &indices {
-            let input = &train_images[idx];
-            let label = train_labels[idx] as usize;
+        for chunk in indices.chunks(batch_size) {
+            let mut batch_inputs: Vec<&[f32]> = Vec::with_capacity(chunk.len());
+            let mut batch_targets = Vec::with_capacity(chunk.len());
 
-            let mut target = vec![0.0; 10];
-            target[label] = 1.0;
+            for &idx in chunk {
+                batch_inputs.push(&train_images[idx]);
 
-            let output = net.train(
+
+                let mut target = [0.0; 10];
+                target[train_labels[idx] as usize] = 1.0;
+                batch_targets.push(target);
+            }
+
+            let batch_targets_1: Vec<&[f32]> = batch_targets.iter().map(|x| x.as_slice()).collect();
+
+            let loss = net.train_batch(
                 &mut net_state,
-                &input,
-                &target,
+                &batch_inputs,
+                &batch_targets_1,
                 learning_rate
             );
 
-            epoch_loss -= (output[label] + 1e-15).ln();
+            epoch_loss += loss;
         }
 
         let mut correct = 0;
