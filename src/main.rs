@@ -1,9 +1,13 @@
 mod activation;
 mod layer;
+mod loss;
 mod network;
+mod training_state;
 
 use activation::Activation;
-use network::{Network, NetworkState};
+use loss::LossFunction;
+use network::Network;
+use training_state::TrainingState;
 
 use std::fs::File;
 use std::io::{BufReader, Read};
@@ -34,10 +38,11 @@ fn main() {
         &[128, 64],
         Activation::LeakyRelu,
         10,
-        Activation::Softmax
+        Activation::Softmax,
+        LossFunction::CrossEntropy
     );
     
-    let mut net_state = NetworkState::new(&net);
+    let mut net_state = TrainingState::new(&net);
 
     let epochs = 10;
     let learning_rate = 0.05;
@@ -102,7 +107,7 @@ fn argmax(data: ndarray::ArrayView1<f32>) -> usize {
 
 
 fn read_mnist_images(path: &str) -> Vec<Vec<f32>> {
-    let file = File::open(path).unwrap_or_else(|_| panic!("Nie znaleziono pliku: {}", path));
+    let file = File::open(path).unwrap_or_else(|_| panic!("File not found: {}", path));
     let mut reader = BufReader::new(file);
 
     let mut magic = [0u8; 4];
@@ -133,7 +138,7 @@ fn read_mnist_images(path: &str) -> Vec<Vec<f32>> {
 }
 
 fn read_mnist_labels(path: &str) -> Vec<u8> {
-    let file = File::open(path).unwrap_or_else(|_| panic!("Nie znaleziono pliku: {}", path));
+    let file = File::open(path).unwrap_or_else(|_| panic!("File not found: {}", path));
     let mut reader = BufReader::new(file);
 
     let mut magic = [0u8; 4];

@@ -1,5 +1,5 @@
 use ndarray::Array2;
-use serde::{Deserialize, Serialize};
+use serde::{Serialize, Deserialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[allow(dead_code)]
@@ -7,7 +7,8 @@ pub enum Activation {
     Relu,
     LeakyRelu,
     Sigmoid,
-    Softmax
+    Softmax,
+    Tanh
 }
 
 impl Activation {
@@ -16,7 +17,7 @@ impl Activation {
             Activation::Relu => inputs.mapv_inplace(|x| x.max(0.0)),
             Activation::LeakyRelu => inputs.mapv_inplace(|x| if x > 0.0 { x } else { 0.01 * x }),
             Activation::Sigmoid => inputs.mapv_inplace(|x| 1.0 / (1.0 + (-x).exp())),
-
+            Activation::Tanh => inputs.mapv_inplace(|x| x.tanh()),
             Activation::Softmax => {
                 for mut row in inputs.rows_mut() {
                     // prevent overflow in exp leading to NaNs; this will not treat saturation
@@ -39,7 +40,7 @@ impl Activation {
                 let std = (2.0 / inputs_count as f32).sqrt();
                 rand_distr::Normal::new(0.0, std).unwrap()
             },
-            Activation::Sigmoid | Activation::Softmax => {
+            Activation::Sigmoid | Activation::Softmax | Activation::Tanh => {
                 // Xavier Normal
                 let std = (2.0 / (inputs_count + outputs_count) as f32).sqrt();
                 rand_distr::Normal::new(0.0, std).unwrap()
@@ -52,7 +53,8 @@ impl Activation {
             Activation::Relu => if y > 0.0 { 1.0 } else { 0.0 },
             Activation::LeakyRelu => if y > 0.0 { 1.0 } else { 0.01 },
             Activation::Sigmoid => y * (1.0 - y),
-            Activation::Softmax => panic!("Softmax wrongly used for the hidden layers!")
+            Activation::Softmax => panic!("Softmax incorrectly used in the hidden layers or paired with wrong loss function!"),
+            Activation::Tanh => 1.0 - y * y
         }
     }
 
