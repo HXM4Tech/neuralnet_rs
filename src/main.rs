@@ -36,7 +36,7 @@ fn main() {
     let mut net = Network::new(
         28 * 28,
         &[128, 64],
-        Activation::LeakyRelu,
+        &[Activation::LeakyRelu, Activation::Tanh],
         10,
         Activation::Softmax,
         LossFunction::CrossEntropy

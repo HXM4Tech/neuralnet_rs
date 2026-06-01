@@ -21,18 +21,24 @@ impl Network {
     pub fn new(
         c_inputs: usize,
         c_hidden_layers: &[usize],
-        hidden_activation: Activation,
+        hidden_activation: &[Activation],
         c_outputs: usize,
         outputs_activation: Activation,
         loss_function: LossFunction
     ) -> Self {
 
+        assert_eq!(
+            c_hidden_layers.len(),
+            hidden_activation.len(),
+            "Lenght of hidden layers neuron counts slice and hidden layers activation functions slice do not match!"
+        );
+
         let mut layers: Vec<Layer> = Vec::with_capacity(c_hidden_layers.len() + 1);
         let mut c_prev: usize = c_inputs;
 
         // Hidden layers neurons
-        for &c_curr in c_hidden_layers {
-            let distr = hidden_activation.weights_distr(c_prev, c_curr);
+        for (i,&c_curr) in c_hidden_layers.iter().enumerate() {
+            let distr = hidden_activation[i].weights_distr(c_prev, c_curr);
             let weights: Vec<f32> = (0..(c_prev*c_curr)).map(|_| distr.sample(&mut rand::rng())).collect();
 
             layers.push(
@@ -41,7 +47,7 @@ impl Network {
                     vec![0.0; c_curr],
                     c_prev,
                     c_curr,
-                    hidden_activation
+                    hidden_activation[i]
                 )
             );
 
