@@ -1,7 +1,8 @@
 use ndarray::Array2;
 use serde::{Serialize, Deserialize};
+use strum::AsRefStr;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, AsRefStr)]
 #[allow(dead_code)]
 pub enum Activation {
     Relu,

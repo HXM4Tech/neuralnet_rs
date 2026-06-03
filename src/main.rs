@@ -88,9 +88,11 @@ fn main() {
         println!("Epoch {}/{} -> Loss: {:.4} | Test Accuracy: {:.2}%", epoch, epochs, avg_loss, accuracy);
     }
 
-    // Save the trained model
+    // Save the trained model both in custom NNRS and ONNX formats
     std::fs::create_dir_all("saved_models").expect("Failed to create directory for saved models");
-    net.save("saved_models/mnist.bin").expect("Failed to save the model");
+
+    net.save("saved_models/mnist.nnrs").expect("Failed to save the model in NNRS format!");
+    net.save_onnx("saved_models/mnist.onnx").expect("Failed to save the model in ONNX format!");
 }
 
 
@@ -129,7 +131,7 @@ fn read_mnist_images(path: &str) -> Vec<Vec<f32>> {
         let normalized: Vec<f32> = buffer.iter().map(|&x| x as f32 / 255.0).collect();
         dataset.push(normalized);
     }
-    
+
     dataset
 }
 
