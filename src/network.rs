@@ -1,9 +1,7 @@
 use crate::activation::Activation;
 use crate::layer::Layer;
-use crate::loss::LossFunction;
-use crate::training_state::{TrainingState, Gradients};
-
-use std::fs::File;
+use crate::loss::Loss;
+use crate::state::{ForwardCache, TrainingState, Gradients};
 
 use rand_distr::Distribution;
 use ndarray::{ArrayView1, Array2, ArrayView2, linalg::general_mat_mul};
@@ -13,7 +11,7 @@ use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize)]
 pub struct Network {
     pub layers: Vec<Layer>,
-    loss_function: LossFunction
+    pub loss_function: Loss
 }
 
 
@@ -24,7 +22,7 @@ impl Network {
         hidden_activation: &[Activation],
         c_outputs: usize,
         outputs_activation: Activation,
-        loss_function: LossFunction
+        loss_function: Loss
     ) -> Self {
 
         assert_eq!(
@@ -74,23 +72,23 @@ impl Network {
         }
     }
 
-    fn forward(&self, net_state: &mut TrainingState, inputs: ArrayView2<f32>) {
-        net_state.neuron_values[0] = inputs.to_owned();
+    fn forward(&self, cache: &mut ForwardCache, inputs: ArrayView2<f32>) {
+        cache.neuron_values[0] = inputs.to_owned();
 
         for i in 0..self.layers.len() {
             let layer = &self.layers[i];
 
-            for mut row in net_state.neuron_values[i+1].rows_mut() {
+            for mut row in cache.neuron_values[i+1].rows_mut() {
                 row.assign(&layer.biases);
             }
 
-            let (a, b) = net_state.neuron_values.split_at_mut(i+1);
+            let (a, b) = cache.neuron_values.split_at_mut(i+1);
 
             if &b[0].shape() != &[inputs.nrows(), layer.biases.len()] {
                 b[0] = Array2::zeros((inputs.nrows(), layer.biases.len()));
             }
 
-            // equivalent to net_state.neuron_values[i+1] += net_state.neuron_values[i].dot(&layer.weights.t());
+            // equivalent to cache.neuron_values[i+1] += cache.neuron_values[i].dot(&layer.weights.t());
             general_mat_mul(
                 1.0,
                 &a[i],
@@ -99,7 +97,7 @@ impl Network {
                 &mut b[0]
             );
 
-            layer.activation.apply(&mut net_state.neuron_values[i+1]);
+            layer.activation.apply(&mut cache.neuron_values[i+1]);
         }
     }
 
@@ -152,32 +150,32 @@ impl Network {
     #[allow(dead_code)]
     pub fn train(
         &mut self,
-        net_state: &mut TrainingState,
+        training_state: &mut TrainingState,
         inputs: ArrayView1<f32>,
         targets: ArrayView1<f32>,
         learning_rate: f32
     ) -> f32 {
-        net_state.grads_buffer.clear();
+
+        let TrainingState {
+            forward_cache,
+            deltas,
+            gradients
+        } = training_state;
+
+        gradients.clear();
 
         let inputs_2d = inputs.insert_axis(ndarray::Axis(0));
         let targets_2d = targets.insert_axis(ndarray::Axis(0));
 
-        self.forward(net_state, inputs_2d);
-
-        let TrainingState {
-            neuron_values,
-            deltas,
-            grads_buffer
-        } = net_state;
-
-        self.backpropagate(neuron_values, deltas, targets_2d, grads_buffer);
+        self.forward(forward_cache, inputs_2d);
+        self.backpropagate(&forward_cache.neuron_values, deltas, targets_2d, gradients);
 
         let loss = self.loss_function.calculate_loss(
-            neuron_values.last().unwrap().view(),
+            forward_cache.neuron_values.last().unwrap().view(),
             targets_2d.view()
         );
 
-        self.apply_gradients(&grads_buffer, learning_rate);
+        self.apply_gradients(&gradients, learning_rate);
 
         loss
     }
@@ -185,59 +183,53 @@ impl Network {
     #[allow(dead_code)]
     pub fn train_batch(
         &mut self,
-        net_state: &mut TrainingState,
+        training_state: &mut TrainingState,
         batch_inputs: ArrayView2<f32>,
         batch_targets: ArrayView2<f32>,
         learning_rate: f32
     ) -> f32 {
+        
+        let TrainingState {
+            forward_cache,
+            deltas,
+            gradients
+        } = training_state;
 
-        let batch_size = batch_inputs.nrows();
+        gradients.clear();
 
-        net_state.grads_buffer.clear();
-
-        self.forward(net_state, batch_inputs);
-
-        let TrainingState { neuron_values, deltas, grads_buffer } = net_state;
-        self.backpropagate(neuron_values, deltas, batch_targets, grads_buffer);
+        self.forward(forward_cache, batch_inputs);
+        self.backpropagate(&forward_cache.neuron_values, deltas, batch_targets, gradients);
 
         let batch_loss = self.loss_function.calculate_loss(
-            neuron_values.last().unwrap().view(),
+            forward_cache.neuron_values.last().unwrap().view(),
             batch_targets.view()
         );
 
-        self.apply_gradients(&net_state.grads_buffer, learning_rate / batch_size as f32);
+        self.apply_gradients(gradients, learning_rate / batch_inputs.nrows() as f32);
 
         batch_loss
     }
 
     #[allow(dead_code)]
-    pub fn run<'ns_lifetime>(
+    pub fn infer<'cache_lifetime>(
         &self,
-        net_state: &'ns_lifetime mut TrainingState,
+        cache: &'cache_lifetime mut ForwardCache,
         inputs: ArrayView1<f32>
-    ) -> ArrayView1<'ns_lifetime, f32> {
+    ) -> ArrayView1<'cache_lifetime, f32> {
+
         let inputs_2d = inputs.insert_axis(ndarray::Axis(0));
-
-        self.forward(net_state, inputs_2d);
-        net_state.neuron_values.last().unwrap().row(0)
+        self.forward(cache, inputs_2d);
+        cache.neuron_values.last().unwrap().row(0)
     }
 
     #[allow(dead_code)]
-    pub fn save(&self, path: &str) -> std::io::Result<()> {
-        let mut file = File::create(path)?;
+    pub fn infer_batch<'cache_lifetime>(
+        &self,
+        cache: &'cache_lifetime mut ForwardCache,
+        batch_inputs: ArrayView2<f32>
+    ) -> ArrayView2<'cache_lifetime, f32> {
 
-        rmp_serde::encode::write(
-            &mut file,
-            self
-        ).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
-    }
-
-    #[allow(dead_code)]
-    pub fn load(path: &str) -> std::io::Result<Self> {
-        let file = File::open(path)?;
-
-        rmp_serde::decode::from_read(
-            file
-        ).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+        self.forward(cache, batch_inputs);
+        cache.neuron_values.last().unwrap().view()
     }
 }

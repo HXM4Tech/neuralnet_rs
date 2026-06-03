@@ -12,7 +12,7 @@ pub enum Activation {
 }
 
 impl Activation {
-    pub fn apply(&self, inputs: &mut Array2<f32>) {
+    pub(crate) fn apply(&self, inputs: &mut Array2<f32>) {
         match self {
             Activation::Relu => inputs.mapv_inplace(|x| x.max(0.0)),
             Activation::LeakyRelu => inputs.mapv_inplace(|x| if x > 0.0 { x } else { 0.01 * x }),
@@ -33,7 +33,7 @@ impl Activation {
         }
     }
 
-    pub fn weights_distr(&self, inputs_count: usize, outputs_count: usize) -> impl rand_distr::Distribution<f32> {
+    pub(crate) fn weights_distr(&self, inputs_count: usize, outputs_count: usize) -> impl rand_distr::Distribution<f32> {
         match self {
             Activation::Relu | Activation::LeakyRelu => {
                 // He Normal
@@ -48,7 +48,7 @@ impl Activation {
         }
     }
 
-    pub fn derivative(&self, y: f32) -> f32 {
+    pub(crate) fn derivative(&self, y: f32) -> f32 {
         match self {
             Activation::Relu => if y > 0.0 { 1.0 } else { 0.0 },
             Activation::LeakyRelu => if y > 0.0 { 1.0 } else { 0.01 },
@@ -58,7 +58,7 @@ impl Activation {
         }
     }
 
-    pub fn derivative_array(&self, y: &Array2<f32>) -> Array2<f32> {
+    pub(crate) fn derivative_array(&self, y: &Array2<f32>) -> Array2<f32> {
         y.mapv(|val| self.derivative(val))
     }
 }

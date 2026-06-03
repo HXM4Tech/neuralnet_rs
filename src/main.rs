@@ -2,12 +2,13 @@ mod activation;
 mod layer;
 mod loss;
 mod network;
-mod training_state;
+mod state;
+mod storage;
 
 use activation::Activation;
-use loss::LossFunction;
+use loss::Loss;
 use network::Network;
-use training_state::TrainingState;
+use state::TrainingState;
 
 use std::fs::File;
 use std::io::{BufReader, Read};
@@ -39,7 +40,7 @@ fn main() {
         &[Activation::LeakyRelu, Activation::Tanh],
         10,
         Activation::Softmax,
-        LossFunction::CrossEntropy
+        Loss::CrossEntropy
     );
     
     let mut net_state = TrainingState::new(&net);
@@ -58,30 +59,28 @@ fn main() {
 
         let mut epoch_loss = 0.0;
 
-        for chunk in indices.chunks(batch_size) {
-            let batch_inputs = train_inputs.select(ndarray::Axis(0), chunk);
-            let batch_targets = train_targets.select(ndarray::Axis(0), chunk);
+        for chunk_start in (0..train_inputs.nrows()).step_by(batch_size) {
+            let chunk_end = (chunk_start + batch_size).min(train_inputs.nrows());
 
+            let batch_inputs = train_inputs.slice(ndarray::s![chunk_start..chunk_end, ..]);
+            let batch_targets = train_targets.slice(ndarray::s![chunk_start..chunk_end, ..]);
 
-            let loss = net.train_batch(
+            let batch_loss = net.train_batch(
                 &mut net_state,
                 batch_inputs.view(),
                 batch_targets.view(),
                 learning_rate
             );
 
-            epoch_loss += loss;
+            epoch_loss += batch_loss;
         }
 
-        let mut correct = 0;
-        for i in 0..test_inputs.nrows() {
-            let output = net.run(&mut net_state, test_inputs.row(i));
-            let prediction = argmax(output);
-            
-            if prediction == test_labels[i] as usize {
-                correct += 1;
-            }
-        }
+        let cache = &mut net_state.forward_cache;
+        let outputs = net.infer_batch(cache, test_inputs.view());
+
+        let correct = outputs.outer_iter().zip(test_labels.iter()).filter(
+            |(output, label)| argmax(output.view()) == **label as usize
+        ).count();
 
         let accuracy = (correct as f32 / test_inputs.nrows() as f32) * 100.0;
         let avg_loss = epoch_loss / train_inputs.nrows() as f32;
@@ -91,18 +90,14 @@ fn main() {
 
     // Save the trained model
     std::fs::create_dir_all("saved_models").expect("Failed to create directory for saved models");
-
     net.save("saved_models/mnist.bin").expect("Failed to save the model");
 }
 
 
 fn argmax(data: ndarray::ArrayView1<f32>) -> usize {
-    data
-        .iter()
-        .enumerate()
-        .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
-        .map(|(index, _)| index)
-        .unwrap()
+    data.iter().enumerate().max_by(
+        |(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+    ).map(|(index, _)| index).unwrap()
 }
 
 
@@ -134,6 +129,7 @@ fn read_mnist_images(path: &str) -> Vec<Vec<f32>> {
         let normalized: Vec<f32> = buffer.iter().map(|&x| x as f32 / 255.0).collect();
         dataset.push(normalized);
     }
+    
     dataset
 }
 

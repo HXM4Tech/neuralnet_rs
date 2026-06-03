@@ -2,14 +2,18 @@ use crate::network::Network;
 
 use ndarray::{Array1, Array2};
 
+pub struct ForwardCache {
+    pub neuron_values: Vec<Array2<f32>>
+}
+
 #[derive(Clone)]
-pub struct Gradients {
+pub(crate) struct Gradients {
     pub weight_grads: Vec<Array2<f32>>,
     pub bias_grads: Vec<Array1<f32>>
 }
 
 impl Gradients {
-    fn new(net: &Network) -> Self {
+    pub fn new(net: &Network) -> Self {
         let mut weight_grads = Vec::with_capacity(net.layers.len());
         let mut bias_grads = Vec::with_capacity(net.layers.len());
 
@@ -36,10 +40,9 @@ impl Gradients {
 }
 
 pub struct TrainingState {
-    // for neuron_values and deltas dims are (batch size, neuron count)
-    pub neuron_values: Vec<Array2<f32>>,
-    pub deltas: Vec<Array2<f32>>,
-    pub grads_buffer: Gradients
+    pub forward_cache: ForwardCache,
+    pub(crate) deltas: Vec<Array2<f32>>,
+    pub(crate) gradients: Gradients
 }
 
 impl TrainingState {
@@ -58,9 +61,9 @@ impl TrainingState {
         }
 
         Self {
-            neuron_values,
+            forward_cache: ForwardCache { neuron_values },
             deltas,
-            grads_buffer: Gradients::new(net)
+            gradients: Gradients::new(net)
         }
     }
 

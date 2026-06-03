@@ -11,7 +11,7 @@ pub struct Layer {
 }
 
 impl Layer {
-    pub fn new(weights_flat: Vec<f32>, biases: Vec<f32>, c_inputs:usize, c_outputs: usize, activation: Activation) -> Self {
+    pub(crate) fn new(weights_flat: Vec<f32>, biases: Vec<f32>, c_inputs:usize, c_outputs: usize, activation: Activation) -> Self {
         debug_assert_eq!(weights_flat.len(), c_inputs * c_outputs);
         debug_assert_eq!(biases.len(), c_outputs);
 
