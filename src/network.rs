@@ -28,7 +28,12 @@ impl Network {
         assert_eq!(
             c_hidden_layers.len(),
             hidden_activation.len(),
-            "Lenght of hidden layers neuron counts slice and hidden layers activation functions slice do not match!"
+            "Lengths of hidden layers neuron counts slice and hidden layers activation functions slice do not match!"
+        );
+
+        assert!(
+            !(matches!(outputs_activation, Activation::Softmax) && matches!(loss_function, Loss::Mse)),
+            "Softmax activation incorrectly paired with Mse loss function!"
         );
 
         let mut layers: Vec<Layer> = Vec::with_capacity(c_hidden_layers.len() + 1);
@@ -36,6 +41,11 @@ impl Network {
 
         // Hidden layers neurons
         for (i,&c_curr) in c_hidden_layers.iter().enumerate() {
+            assert!(
+                !matches!(hidden_activation[i], Activation::Softmax),
+                "Softmax activation incorrectly used in the hidden layers!"
+            );
+
             let distr = hidden_activation[i].weights_distr(c_prev, c_curr);
             let weights: Vec<f32> = (0..(c_prev*c_curr)).map(|_| distr.sample(&mut rand::rng())).collect();
 
@@ -67,7 +77,7 @@ impl Network {
         );
 
         Self {
-            layers: layers,
+            layers,
             loss_function
         }
     }
@@ -124,7 +134,7 @@ impl Network {
             let curr_layer = &self.layers[i];
             
             let delta = deltas[i + 1].dot(&next_layer.weights) 
-                * &curr_layer.activation.derivative_array(&neuron_values[i + 1]);
+                * &curr_layer.activation.derivative_array(&neuron_values[i + 1].view());
             
             deltas[i] = delta;
         }
@@ -188,7 +198,7 @@ impl Network {
         batch_targets: ArrayView2<f32>,
         learning_rate: f32
     ) -> f32 {
-        
+
         let TrainingState {
             forward_cache,
             deltas,

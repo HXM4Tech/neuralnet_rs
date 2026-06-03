@@ -6,6 +6,26 @@ pub struct ForwardCache {
     pub neuron_values: Vec<Array2<f32>>
 }
 
+impl ForwardCache {
+    #[allow(dead_code)]
+    pub fn new(net: &Network) -> Self {
+        let c_inputs = net.layers[0].weights.shape()[1];
+        let layers = &net.layers;
+        
+        let mut neuron_values = Vec::with_capacity(layers.len() + 1);
+
+        neuron_values.push(Array2::zeros((0, c_inputs)));
+
+        for l in layers {
+            neuron_values.push(Array2::zeros((0, l.biases.len())));
+        }
+
+        Self {
+            neuron_values
+        }
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct Gradients {
     pub weight_grads: Vec<Array2<f32>>,

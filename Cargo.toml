@@ -3,6 +3,9 @@ name = "neuralnet_rs"
 version = "0.1.0"
 edition = "2024"
 
+[profile.test]
+opt-level = 3
+
 [dependencies]
 ndarray = { version = "0.17.2", features = ["serde"] }
 onnx-pb = "0.1.4"

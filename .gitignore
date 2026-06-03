@@ -1,5 +1,2 @@
 /target
 /Cargo.lock
-
-/training_data
-/saved_models

@@ -14,25 +14,17 @@ impl Loss {
     pub(crate) fn calculate_loss(&self, outputs: ArrayView2<f32>, targets: ArrayView2<f32>) -> f32 {
         let batch_size = outputs.nrows();
         let target_dim = outputs.ncols();
-        let mut batch_loss = 0.0;
 
         match self {
             Loss::CrossEntropy => {
-                for i in 0..batch_size {
-                    for j in 0..target_dim {
-                        batch_loss -= (outputs[[i, j]] + 1e-15).ln() * targets[[i, j]];
-                    }
-                }
-                batch_loss
+                let loss_matrix = -(&targets * (&outputs + 1e-15).mapv(f32::ln));
+
+                loss_matrix.sum()
             },
             Loss::Mse => {
-                for i in 0..batch_size {
-                    for j in 0..target_dim {
-                        let error = outputs[[i, j]] - targets[[i, j]];
-                        batch_loss += error * error;
-                    }
-                }
-                batch_loss / (batch_size * target_dim) as f32
+                let errors = &outputs - &targets;
+
+                (&errors * &errors).sum() / (batch_size * target_dim) as f32
             }
         }
     }
@@ -44,15 +36,17 @@ impl Loss {
         output_activation: &Activation,
     ) -> Array2<f32> {
 
-        match self {
-            Loss::CrossEntropy => {
-                // Skrócona pochodna dla Softmax + CrossEntropy
+        match (self, output_activation) {
+            (Loss::CrossEntropy, Activation::Softmax) => {
                 &outputs - &targets
             },
-            Loss::Mse => {
-                // Pochodna MSE pomnożona przez pochodną funkcji aktywacji
-                (&outputs - &targets) * &output_activation.derivative_array(&outputs.to_owned())
-            }
+            (Loss::CrossEntropy, _) => {
+                // 1e-7 to prevent division by zero
+                let loss_derivative = -&targets / (&outputs + 1e-7);
+
+                loss_derivative * &output_activation.derivative_array(&outputs)
+            },
+            (Loss::Mse, _) => (&outputs - &targets) * &output_activation.derivative_array(&outputs)
         }
     }
 }
