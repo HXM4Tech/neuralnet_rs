@@ -136,7 +136,7 @@ fn hidden_layer_mismatch() {
 
 #[test]
 fn mnist_95percent_accuracy() {
-    let (net, epoch_losses) = train_mnist().unwrap();
+    let (net, epoch_losses) = train_mnist();
 
     let l0 = epoch_losses[0];
     let l_last = epoch_losses[epoch_losses.len() - 1];
@@ -184,12 +184,11 @@ fn save_load_nnrs() {
         Loss::Mse
     );
 
+    let mut fc = ForwardCache::new(&net);
+
     std::fs::create_dir_all("target/test_temp").unwrap();
     net.save("target/test_temp/mnist_model.nnrs").unwrap();
     let loaded_net = Network::load("target/test_temp/mnist_model.nnrs").unwrap();
-
-    let mut fc1 = ForwardCache::new(&net);
-    let mut fc2 = ForwardCache::new(&loaded_net);
 
     let inputs = ndarray::Array2::from_shape_vec(
         (4, 2),
@@ -201,8 +200,10 @@ fn save_load_nnrs() {
         ]
     ).unwrap();
 
-    let outputs = net.infer_batch(&mut fc1, inputs.view());
-    let loaded_outputs = loaded_net.infer_batch(&mut fc2, inputs.view());
+    // to_owned() is required to be able to use the same ForwardCache for both networks
+    let outputs = net.infer_batch(&mut fc, inputs.view()).to_owned();
+
+    let loaded_outputs = loaded_net.infer_batch(&mut fc, inputs.view());
 
     assert_eq!(
         outputs.shape(),
@@ -225,7 +226,7 @@ fn save_load_nnrs() {
 #[test]
 #[cfg_attr(no_python_env, ignore = "Python environment or required libraries are missing")]
 fn save_mnist_onnx_plus_python_onnxruntime_inference() {
-    let (net, _) = train_mnist().unwrap();
+    let (net, _) = train_mnist();
 
     std::fs::create_dir_all("target/test_temp").unwrap();
     net.save_onnx("target/test_temp/mnist_model.onnx").unwrap();
@@ -248,7 +249,7 @@ fn save_mnist_onnx_plus_python_onnxruntime_inference() {
 
 /// Helper functions for tests
 
-fn train_mnist() -> std::io::Result<(Network , Vec<f32>)> {
+fn train_mnist() -> (Network , Vec<f32>) {
     // Load MNIST dataset
     let train_images = read_mnist_images("tests/training_data/train-images.idx3-ubyte");
     let train_labels = read_mnist_labels("tests/training_data/train-labels.idx1-ubyte");
@@ -305,7 +306,7 @@ fn train_mnist() -> std::io::Result<(Network , Vec<f32>)> {
         epoch_losses.push(epoch_loss);
     }
 
-    Ok((net, epoch_losses))
+    (net, epoch_losses)
 }
 
 

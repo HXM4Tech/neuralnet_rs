@@ -3,7 +3,6 @@ use crate::network::Network;
 use std::fs::File;
 
 impl Network {
-    #[allow(dead_code)]
     pub fn save(&self, path: &str) -> std::io::Result<()> {
         let mut file = File::create(path)?;
 
@@ -13,7 +12,6 @@ impl Network {
         ).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
     }
 
-    #[allow(dead_code)]
     pub fn load(path: &str) -> std::io::Result<Self> {
         let file = File::open(path)?;
 
@@ -22,7 +20,6 @@ impl Network {
         ).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
     }
 
-    #[allow(dead_code)]
     pub fn save_onnx(&self, path: &str) -> std::io::Result<()> {
         use crate::activation::Activation;
 

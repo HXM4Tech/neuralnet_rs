@@ -4,10 +4,9 @@ use ndarray::{Array2, ArrayView2};
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
-#[allow(dead_code)]
 pub enum Loss {
     CrossEntropy,
-    Mse
+    Mse,
 }
 
 impl Loss {

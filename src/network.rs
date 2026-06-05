@@ -157,7 +157,6 @@ impl Network {
         }
     }
 
-    #[allow(dead_code)]
     pub fn train(
         &mut self,
         training_state: &mut TrainingState,
@@ -190,7 +189,6 @@ impl Network {
         loss
     }
 
-    #[allow(dead_code)]
     pub fn train_batch(
         &mut self,
         training_state: &mut TrainingState,
@@ -220,7 +218,6 @@ impl Network {
         batch_loss
     }
 
-    #[allow(dead_code)]
     pub fn infer<'cache_lifetime>(
         &self,
         cache: &'cache_lifetime mut ForwardCache,
@@ -232,7 +229,6 @@ impl Network {
         cache.neuron_values.last().unwrap().row(0)
     }
 
-    #[allow(dead_code)]
     pub fn infer_batch<'cache_lifetime>(
         &self,
         cache: &'cache_lifetime mut ForwardCache,

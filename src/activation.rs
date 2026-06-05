@@ -3,14 +3,13 @@ use serde::{Serialize, Deserialize};
 use strum::AsRefStr;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, AsRefStr)]
-#[allow(dead_code)]
 pub enum Activation {
     Relu,
     LeakyRelu,
     Sigmoid,
     Softmax,
     Tanh,
-    Identity
+    Identity,
 }
 
 impl Activation {
